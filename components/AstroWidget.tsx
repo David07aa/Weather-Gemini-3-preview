@@ -9,27 +9,49 @@ interface AstroWidgetProps {
 const AstroWidget: React.FC<AstroWidgetProps> = ({ data, air }) => {
   const { sunrise, sunset } = data || {};
 
+  // Helper to format time strings (handling ISO 8601 and HH:mm)
+  const formatTime = (timeStr: string | undefined) => {
+    if (!timeStr) return '--:--';
+    // Extract HH:mm from ISO string (e.g., 2025-12-01T07:17+08:00)
+    if (timeStr.includes('T')) {
+      return timeStr.split('T')[1].substring(0, 5);
+    }
+    // Assume it's already HH:mm or similar
+    return timeStr.substring(0, 5);
+  };
+
+  // Display strings
+  const sunriseTime = formatTime(sunrise);
+  const sunsetTime = formatTime(sunset);
+
   // Calculate the target percentage based on current time
   const targetPercentage = useMemo(() => {
     if (!sunrise || !sunset) return 0;
     
     const now = new Date();
-    const parseTime = (timeStr: string) => {
-      const [h, m] = timeStr.split(':').map(Number);
-      const d = new Date();
-      d.setHours(h, m, 0, 0);
-      return d;
+    
+    const parseToDate = (timeStr: string) => {
+        const time = formatTime(timeStr);
+        const [h, m] = time.split(':').map(Number);
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        return d;
     };
 
-    const riseTime = parseTime(sunrise);
-    const setTime = parseTime(sunset);
+    const riseTime = parseToDate(sunrise);
+    const setTime = parseToDate(sunset);
     
+    // Robustness check
+    if (isNaN(riseTime.getTime()) || isNaN(setTime.getTime())) return 0;
+
     if (now < riseTime) return 0;
     if (now > setTime) return 100;
     
     const total = setTime.getTime() - riseTime.getTime();
     const elapsed = now.getTime() - riseTime.getTime();
     
+    if (total <= 0) return 0;
+
     return Math.min(100, Math.max(0, (elapsed / total) * 100));
   }, [sunrise, sunset]);
 
@@ -37,15 +59,16 @@ const AstroWidget: React.FC<AstroWidgetProps> = ({ data, air }) => {
   const [percentage, setPercentage] = useState(0);
 
   useEffect(() => {
+    // Reset percentage when target changes significantly or on mount
+    setPercentage(0);
+    
     let start: number;
-    const duration = 1500; // 1.5s animation on mount
+    const duration = 1500; 
     
     const animate = (timestamp: number) => {
         if (!start) start = timestamp;
         const p = Math.min((timestamp - start) / duration, 1);
-        
-        // Cubic Ease Out
-        const ease = 1 - Math.pow(1 - p, 3);
+        const ease = 1 - Math.pow(1 - p, 3); // Cubic Ease Out
         
         setPercentage(targetPercentage * ease);
         
@@ -54,7 +77,8 @@ const AstroWidget: React.FC<AstroWidgetProps> = ({ data, air }) => {
         }
     };
     
-    requestAnimationFrame(animate);
+    const handle = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(handle);
   }, [targetPercentage]);
 
   // SVG Configuration
@@ -62,15 +86,14 @@ const AstroWidget: React.FC<AstroWidgetProps> = ({ data, air }) => {
   const height = 160;
   const radius = 110;
   const cx = width / 2;
-  const cy = height - 40; // Horizon baseline, leaving room for text
+  const cy = height - 40; 
 
   // Calculate Sun Position
-  // Angle: PI (Left/Sunrise) -> 0 (Right/Sunset)
   const angle = Math.PI * (1 - percentage / 100);
   const x = cx + radius * Math.cos(angle);
   const y = cy - radius * Math.sin(angle);
 
-  // Dash calculations for the progress stroke
+  // Dash calculations
   const arcLength = Math.PI * radius;
   const dashOffset = arcLength * (1 - percentage / 100);
 
@@ -103,7 +126,7 @@ const AstroWidget: React.FC<AstroWidgetProps> = ({ data, air }) => {
 
       {/* Main Animation Area */}
       <div className="flex-1 w-full flex items-end justify-center">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full preserve-3d">
             <defs>
                 <linearGradient id="sunGradient" x1="0" y1="0" x2="0" y2="1">
                      <stop offset="0%" stopColor="#fbbf24" />
@@ -171,15 +194,15 @@ const AstroWidget: React.FC<AstroWidgetProps> = ({ data, air }) => {
                 <circle r="4" fill="#fff" fillOpacity="0.3" />
             </g>
 
-            {/* Time Labels - Embedded in SVG for perfect alignment with Arc Start/End */}
+            {/* Time Labels */}
             <g transform={`translate(${cx - radius}, ${cy + 20})`} textAnchor="middle">
                  <text fill="rgba(255,255,255,0.5)" fontSize="10" fontWeight="bold" dy="-5">Sunrise</text>
-                 <text fill="white" fontSize="12" dy="10">{sunrise}</text>
+                 <text fill="white" fontSize="12" dy="10">{sunriseTime}</text>
             </g>
 
             <g transform={`translate(${cx + radius}, ${cy + 20})`} textAnchor="middle">
                  <text fill="rgba(255,255,255,0.5)" fontSize="10" fontWeight="bold" dy="-5">Sunset</text>
-                 <text fill="white" fontSize="12" dy="10">{sunset}</text>
+                 <text fill="white" fontSize="12" dy="10">{sunsetTime}</text>
             </g>
         </svg>
       </div>
