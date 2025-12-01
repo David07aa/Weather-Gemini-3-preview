@@ -1,0 +1,7 @@
+{
+  "name": "QWeather React Dashboard",
+  "description": "A modern, glassmorphism-styled weather dashboard using React, Tailwind CSS, and the HeFeng (QWeather) API. Features real-time data, forecasts, astronomy, and air quality information.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
